@@ -63,8 +63,11 @@ def get_nyse_tickers() -> list[str]:
 
 
 def get_omx_stockholm_tickers() -> list[str]:
-    from omx_stockholm import OMX_STOCKHOLM_TICKERS
-    return sorted(set(OMX_STOCKHOLM_TICKERS))
+    """Scrapes the full Nasdaq Nordic Stockholm main-market list, falling
+    back to the hand-curated static list (omx_stockholm.py) if the scrape
+    fails. See fetch_omx_stockholm.py for details."""
+    from fetch_omx_stockholm import get_omx_stockholm_tickers as _scrape
+    return _scrape()
 
 
 def get_full_universe() -> dict[str, list[str]]:
