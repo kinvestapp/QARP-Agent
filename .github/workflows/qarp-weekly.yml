@@ -1,0 +1,42 @@
+name: QARP Weekly Scan
+
+on:
+  schedule:
+    # 23:00 CET  (winter, UTC+1) -> 22:00 UTC, every Monday
+    - cron: "0 22 * * 1"
+    # 23:00 CEST (summer, UTC+2) -> 21:00 UTC, every Monday
+    - cron: "0 21 * * 1"
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: "Run scan regardless of biweekly schedule"
+        required: false
+        default: "false"
+
+jobs:
+  qarp-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330  # leave headroom under GH Actions' 6h hard limit
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install yfinance requests anthropic python-substack
+
+      - name: Run QARP scan
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          MIN_MARKET_CAP: ${{ secrets.MIN_MARKET_CAP }}  # optional, blank = no floor
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUBSTACK_EMAIL: ${{ secrets.SUBSTACK_EMAIL }}
+          SUBSTACK_PASSWORD: ${{ secrets.SUBSTACK_PASSWORD }}
+          SUBSTACK_PUBLICATION_URL: ${{ secrets.SUBSTACK_PUBLICATION_URL }}
+          PUBLISH_MODE: ${{ secrets.PUBLISH_MODE }}  # "draft" (default/safe) or "publish"
+          FORCE_RUN: ${{ github.event.inputs.force_run }}
+        run: python run_qarp_scan.py
