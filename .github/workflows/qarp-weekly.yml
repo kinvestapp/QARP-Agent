@@ -25,7 +25,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install --upgrade yfinance requests anthropic python-substack
+        run: pip install --upgrade yfinance requests anthropic python-substack beautifulsoup4
 
       - name: Log yfinance version
         run: pip show yfinance | grep -E "Name|Version"
