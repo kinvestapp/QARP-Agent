@@ -44,6 +44,10 @@ class RankedStock:
 def _zscore(value, mean, stdev):
     if value is None or stdev == 0 or stdev is None:
         return 0.0
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return 0.0
     return (value - mean) / stdev
 
 
@@ -75,7 +79,10 @@ def compute_composite_scores(results: list) -> list[RankedStock]:
         for k in metric_lists:
             v = r.metrics.get(k)
             if v is not None:
-                metric_lists[k].append(v)
+                try:
+                    metric_lists[k].append(float(v))  # yfinance sometimes returns numpy.float64,
+                except (TypeError, ValueError):        # which breaks statistics.pstdev's exact-fraction
+                    continue                             # path in Python 3.12 — force plain float.
 
     stats = {}
     for k, vals in metric_lists.items():
