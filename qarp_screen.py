@@ -41,8 +41,10 @@ MAX_PE = 30.0
 MAX_P_FCF = 25.0
 MIN_MARKET_CAP = 0  # set via env in run_qarp_scan.py; 0 = no floor (full universe)
 
-MAX_WORKERS = 6          # keep concurrency modest to avoid Yahoo rate-limit bans
+MAX_WORKERS = 6           # keep concurrency modest for the heavy .info fetch to avoid Yahoo rate-limit bans
+QUICK_FILTER_MAX_WORKERS = 15  # fast_info is a much lighter call, safe to run with more concurrency
 REQUEST_DELAY_RANGE = (0.4, 1.1)  # jittered delay per request
+QUICK_FILTER_DELAY_RANGE = (0.1, 0.3)
 MAX_RETRIES = 2
 
 
@@ -57,6 +59,43 @@ class QarpResult:
 def _safe_get(d: dict, key, default=None):
     v = d.get(key, default)
     return v if v is not None else default
+
+
+def quick_market_cap_check(ticker: str) -> tuple[str, float | None]:
+    """Lightweight pre-filter pass. yfinance's fast_info hits a much cheaper
+    endpoint than .info (no financials/balance sheet), so this lets us drop
+    thousands of tickers below MIN_MARKET_CAP before ever paying for the
+    expensive full fetch in screen_one()."""
+    try:
+        time.sleep(random.uniform(*QUICK_FILTER_DELAY_RANGE))
+        t = yf.Ticker(ticker)
+        fi = t.fast_info
+        cap = fi.get("market_cap") if hasattr(fi, "get") else getattr(fi, "market_cap", None)
+        return ticker, cap
+    except Exception:
+        return ticker, None
+
+
+def prefilter_by_market_cap(tickers: list[str], min_cap: float, max_workers: int = QUICK_FILTER_MAX_WORKERS) -> list[str]:
+    """Returns only tickers whose market cap clears min_cap. If min_cap is 0
+    (no floor set), skips the pre-filter entirely and returns tickers unchanged
+    — no point paying for an extra pass with nothing to filter on."""
+    if not min_cap:
+        return tickers
+
+    survivors = []
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(quick_market_cap_check, tk): tk for tk in tickers}
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            ticker, cap = fut.result()
+            if cap is not None and cap >= min_cap:
+                survivors.append(ticker)
+            if done % 500 == 0:
+                log.info(f"pre-filtered {done}/{len(tickers)} — {len(survivors)} above cap floor so far")
+    log.info(f"Market cap pre-filter: {len(survivors)}/{len(tickers)} tickers cleared ${min_cap:,.0f}")
+    return survivors
 
 
 def _compute_roic(info: dict, financials, balance_sheet) -> float | None:

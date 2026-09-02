@@ -66,6 +66,10 @@ def main():
 
     all_passed = []
     for exch, tickers in universe.items():
+        if min_cap:
+            log.info(f"Pre-filtering {exch} ({len(tickers)} tickers) by market cap...")
+            tickers = qarp_screen.prefilter_by_market_cap(tickers, min_cap)
+            log.info(f"{exch}: {len(tickers)} tickers cleared the cap floor, proceeding to full QARP scan")
         log.info(f"Screening {exch} ({len(tickers)} tickers)...")
         results = qarp_screen.run_screen(tickers)
         passed = [r for r in results if r.passed]
